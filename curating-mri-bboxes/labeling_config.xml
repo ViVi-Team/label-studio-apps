@@ -1,0 +1,12 @@
+<View>
+  <Header value="Brain Image Annotation"/>
+  <View style="display:flex;align-items:start;gap:8px;flex-direction:row">
+    <Image name="image" value="$image" zoom="true" rotate="true"/>
+    <RectangleLabels name="label" toName="image" showInline="false">
+      <Label value="N/A" background="#FF6B6B" hotkey="1"/>
+      <Label value="GCA" background="#4ECDC4" hotkey="2"/>
+      <Label value="Koedam" background="#FFE66D" hotkey="3"/>
+      <Label value="MTA" background="#95E1D3" hotkey="4"/>
+    </RectangleLabels>
+  </View>
+</View>
