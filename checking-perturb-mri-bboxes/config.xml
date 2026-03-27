@@ -1,0 +1,10 @@
+<View>
+  <Header value="Brain Image Checking"/>
+  <View style="display:flex;align-items:start;gap:8px;flex-direction:row">
+    <Image name="image" value="$image"/>
+    <Choices name="answer" toName="image" choice="single" required="true">
+      <Choice value="Accept"/>
+      <Choice value="Reject"/>
+    </Choices>
+  </View>
+</View>
