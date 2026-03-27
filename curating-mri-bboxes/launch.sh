@@ -4,6 +4,7 @@ export LOCAL_FILES_SERVING_ENABLED=true
 export LOCAL_FILES_DOCUMENT_ROOT="$SCRIPT_DIR"
 
 lsof -ti:8081 | xargs kill -9 2>/dev/null || true
+lsof -ti:8080 | xargs kill -9 2>/dev/null || true
 
 INPUT_DIR="$SCRIPT_DIR/images"
 INPUT_DIR_ESCAPED=$(printf '%s\n' "$INPUT_DIR" | sed -e 's/[\/&]/\\&/g')
@@ -13,4 +14,4 @@ cd "$SCRIPT_DIR/images"
 python3 "$SCRIPT_DIR/server.py" 8081 &
 sleep 2
 
-label-studio start curating_mri_bboxes --init --label-config="$SCRIPT_DIR/config.xml"
+label-studio start checking_perturb_bboxes --init --label-config="$SCRIPT_DIR/config.xml"

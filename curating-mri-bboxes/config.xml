@@ -6,7 +6,7 @@
       <Label value="N/A" background="#FF6B6B" hotkey="1"/>
       <Label value="GCA" background="#4ECDC4" hotkey="2"/>
       <Label value="Koedam" background="#FFE66D" hotkey="3"/>
-      <Label value="MTA" background="#95E1D3" hotkey="4"/>
+      <Label value="MTA" background="#0061ff" hotkey="4"/>
     </RectangleLabels>
   </View>
 </View>
