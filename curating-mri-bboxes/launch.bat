@@ -24,4 +24,4 @@ start /b cmd /c "python \"%SCRIPT_DIR%\server.py\" 8081"
 timeout /t 2 >nul
 
 :: Start Label Studio
-label-studio start curating_mri_bboxes --init --label-config="%SCRIPT_DIR%\config.xml"
+label-studio start curating_mri_bboxes --init --label-config="%SCRIPT_DIR%\config.xml" --username defaultuser --password badpassword
