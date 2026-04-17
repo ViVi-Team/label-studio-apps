@@ -306,7 +306,6 @@ def generate_perturbed_labels(
             gold_by_patient[pid].setdefault(snum, []).append((fname, data['boxes'], data['notes']))
 
     total_skipped_gold = 0
-    total_skipped_no_neighbor = 0
 
     for pid, files in sorted(inventory.items()):
         gold_slices = gold_by_patient.get(pid, {})
@@ -341,7 +340,6 @@ def generate_perturbed_labels(
             if not (mpr_min <= snum <= mpr_max):
                 # Target slice is outside this MPR's valid range — should never happen
                 # if inventory is clean, but guard explicitly.
-                total_skipped_no_neighbor += 1
                 continue
 
             for g_snum in sorted_gold_nums:
@@ -355,7 +353,6 @@ def generate_perturbed_labels(
                     best_notes = gn
 
             if best_dist > max_dist:
-                total_skipped_no_neighbor += 1
                 continue
 
             # Perturb each labelled box
@@ -378,7 +375,6 @@ def generate_perturbed_labels(
 
     print(f"\n── Summary ─────────────────────────────────────")
     print(f"  Gold slides (skipped):          {total_skipped_gold}")
-    print(f"  Slides >max_dist (skipped):     {total_skipped_no_neighbor}")
     print(f"  Perturbed entries generated:    {len(results)}")
     print(f"────────────────────────────────────────────────\n")
     return results
@@ -580,18 +576,21 @@ def render_all_images(
         pid, _ = parse_patient_slide(fname)
         gold_patients.add(pid)
 
-    # Build list of all slides to render
+    # Build list of slides to render (only perturbed, skip gold and out-of-range)
     all_entries = []
     for pid in sorted(gold_patients):
         for fname in inventory.get(pid, []):
-            all_entries.append((pid, fname))
+            _, slide_suffix = parse_patient_slide(fname)
+            perturb_key = (pid, slide_suffix)
+            if perturb_key in perturbed_lookup:
+                all_entries.append((pid, fname))
 
     if num_samples > 0 and num_samples < len(all_entries):
         step = len(all_entries) // num_samples
         all_entries = all_entries[::step][:num_samples]
 
     rendered = skipped = 0
-    cnt = {'gold': 0, 'perturbed': 0, 'out_of_range': 0}
+    cnt = {'gold': 0, 'perturbed': 0}
     total = len(all_entries)
 
     for i, (pid, fname) in enumerate(all_entries):
@@ -607,80 +606,38 @@ def render_all_images(
         perturb_key = (pid, slide_suffix)
         target_fname_key = fname  # e.g. OAS1_0001_MR1_mpr-1_106.jpg
 
-        # Determine status
-        if target_fname_key in gold:
-            status     = 'gold'
-            gold_boxes = gold[target_fname_key]['boxes']
-            pert_boxes = None
-            origin_slide = slide_suffix
-        elif perturb_key in perturbed_lookup:
-            entry        = perturbed_lookup[perturb_key]
-            status       = 'perturbed'
-            origin_slide = entry['origin_slice']
-            origin_fname = entry.get('origin_fname', '')
-            if not origin_fname:
-                # fallback for old cache if any
-                origin_fname = f"{pid}_{origin_slide}.jpg"
-            gold_boxes   = gold.get(origin_fname, {}).get('boxes', [])
-            pert_boxes   = entry['boxes']
-        else:
-            status       = 'out_of_range'
-            gold_boxes   = []
-            pert_boxes   = None
-            origin_slide = ''
+        # all_entries only contains perturbed slides
+        entry        = perturbed_lookup[perturb_key]
+        origin_slide = entry['origin_slice']
+        origin_fname = entry.get('origin_fname', f"{pid}_{origin_slide}.jpg")
+        gold_boxes   = gold.get(origin_fname, {}).get('boxes', [])
+        pert_boxes   = entry['boxes']
+        dist         = entry['distance']
 
         try:
             target_img = _load_image(target_path)
             W, H = target_img.size
-            gray_img = Image.new('RGB', (W, H), (80, 80, 80))  # gray placeholder
 
-            # Panel 1: Original (always the target image, no boxes)
+            # Panel 1: Original (target image, no boxes)
             orig_panel = target_img.copy()
 
             # Panel 2: Gold SOURCE image with gold boxes drawn on it
-            if status == 'gold':
-                # The gold source IS this image itself
-                gold_src_img = target_img.copy()
-            elif status == 'perturbed':
-                # Load the actual origin slide image
-                # (origin_fname already determined above)
-                origin_path  = path_map.get(origin_fname)
-                if origin_path and os.path.exists(origin_path):
-                    gold_src_img = _load_image(origin_path)
-                    gold_src_img = gold_src_img.resize((W, H), Image.LANCZOS)
-                else:
-                    gold_src_img = gray_img.copy()
-            else:  # out_of_range
-                gold_src_img = gray_img.copy()
+            origin_path  = path_map.get(origin_fname)
+            if origin_path and os.path.exists(origin_path):
+                gold_src_img = _load_image(origin_path)
+                gold_src_img = gold_src_img.resize((W, H), Image.LANCZOS)
+            else:
+                gold_src_img = Image.new('RGB', (W, H), (80, 80, 80))
 
             gold_panel = _draw_boxes(gold_src_img, gold_boxes, color='red', width=2)
 
-            # Panel 3: Perturbed boxes on target, or gold (green) if this IS gold, or gray
-            if status == 'perturbed':
-                pert_panel = _draw_boxes(target_img.copy(), pert_boxes, color='yellow', width=2)
-            elif status == 'gold':
-                pert_panel = _draw_boxes(target_img.copy(), gold_boxes, color='lime', width=2)
-            else:  # out_of_range — gray
-                pert_panel = gray_img.copy()
+            # Panel 3: Perturbed boxes on target
+            pert_panel = _draw_boxes(target_img.copy(), pert_boxes, color='yellow', width=2)
 
             # Label bars
-            if status == 'gold':
-                p3_bg = '#27ae60'  # green
-                p3_text = f'GOLD STANDARD ({slide_suffix})'
-                p2_text = f'GOLD BOXES ({slide_suffix})'
-            elif status == 'perturbed':
-                dist = perturbed_lookup[perturb_key]['distance']
-                p3_bg = '#b8860b'
-                p3_text = f'PERTURBED  dist={dist}  ({slide_suffix})'
-                p2_text = f'GOLD SOURCE ({origin_slide})'
-            else:
-                p3_bg = '#444444'
-                p3_text = f'OUT OF RANGE ({slide_suffix})'
-                p2_text = f'NEAREST GOLD: none'
-
             bar1 = _make_label_bar(W, f'ORIGINAL ({slide_suffix})', '#1a252f')
-            bar2 = _make_label_bar(W, p2_text,                      '#8e1a1a')
-            bar3 = _make_label_bar(W, p3_text,                       p3_bg)
+            bar2 = _make_label_bar(W, f'GOLD SOURCE ({origin_slide})', '#8e1a1a')
+            bar3 = _make_label_bar(W, f'PERTURBED  dist={dist}  ({slide_suffix})', '#b8860b')
 
             def _stack(panel, bar):
                 out = Image.new('RGB', (W, H + 28))
@@ -703,7 +660,7 @@ def render_all_images(
             patient_dir = os.path.join(output_dir, pid)
             os.makedirs(patient_dir, exist_ok=True)
             composite.save(os.path.join(patient_dir, f"{slide_suffix}.jpg"), 'JPEG', quality=85)
-            cnt[status] += 1
+            cnt['perturbed'] += 1
             rendered += 1
 
         except Exception as e:
@@ -711,9 +668,7 @@ def render_all_images(
             skipped += 1
 
     print(f"All-images rendered → {output_dir}  ({rendered} saved, {skipped} skipped)")
-    print(f"  🟢 GOLD STANDARD : {cnt['gold']}")
     print(f"  🟡 PERTURBED     : {cnt['perturbed']}")
-    print(f"  ◻  OUT OF RANGE  : {cnt['out_of_range']}")
 
 
 # ── Output ────────────────────────────────────────────────────────────────────
