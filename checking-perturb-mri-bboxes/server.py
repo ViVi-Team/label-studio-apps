@@ -19,6 +19,9 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress request logging
 
+# Allow immediate rebind of a recently-used port (avoids TIME_WAIT "Address already in use")
+socketserver.TCPServer.allow_reuse_address = True
+
 with socketserver.TCPServer(('', PORT), CORSRequestHandler) as httpd:
     print(f"Serving on port {PORT} with CORS enabled")
     httpd.serve_forever()
